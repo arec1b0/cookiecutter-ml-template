@@ -1,0 +1,64 @@
+stages:
+  - test
+
+variables:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_NO_CACHE_DIR: "1"
+
+test_template:
+  stage: test
+  image: python:3.11-slim
+  before_script:
+    - python --version
+    - pip install --upgrade pip
+    - pip install cookiecutter
+  script:
+    # 1. Generate a project from the current template (the repository is mounted in /builds/.../cookiecutter-ml-template)
+    - cookiecutter . --no-input
+
+    # 2. Navigate to the generated project (using default values from cookiecutter.json)
+    - cd my_ml_project
+
+    # 3. Create a minimal dataset for the pipeline (the same one we did locally)
+    - mkdir -p data/processed
+    - |
+      cat > data/processed/train.csv << 'EOF'
+      feature1,feature2,feature3,target
+      0.1,1.0,0.5,0
+      0.2,0.9,0.4,0
+      0.3,0.8,0.3,0
+      0.4,0.7,0.2,0
+      0.5,0.6,0.1,0
+      1.0,0.1,0.9,1
+      0.9,0.2,0.8,1
+      0.8,0.3,0.7,1
+      0.7,0.4,0.6,1
+      0.6,0.5,0.5,1
+      0.15,0.95,0.45,0
+      0.25,0.85,0.35,0
+      0.35,0.75,0.25,0
+      0.45,0.65,0.15,0
+      0.55,0.55,0.05,0
+      0.95,0.15,0.85,1
+      0.85,0.25,0.75,1
+      0.75,0.35,0.65,1
+      0.65,0.45,0.55,1
+      0.55,0.55,0.45,1
+      EOF
+
+    # 4. Create venv, install dependencies and the package itself
+    - python -m venv .venv
+    - . .venv/bin/activate
+    - pip install --upgrade pip
+    - pip install -r requirements.txt
+    - pip install -e .[dev]
+
+    # 5. Run tests and pipeline
+    - pytest -q
+    - python -m mlpkg.pipelines.train
+  artifacts:
+    when: always
+    paths:
+      - my_ml_project/.venv
+      - my_ml_project/data/processed/train.csv
+    expire_in: 1 day
